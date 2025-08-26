@@ -1,6 +1,6 @@
 import streamlit as st
-from langgraph_backend import chatbot
-from langchain_core.messages import HumanMessage
+from langgraph_tool_backend import chatbot
+from langchain_core.messages import HumanMessage, AIMessage
 import uuid
 
 # **************************************** utility functions *************************
@@ -20,7 +20,9 @@ def add_thread(thread_id):
         st.session_state['chat_threads'].append(thread_id)
 
 def load_conversation(thread_id):
-    return chatbot.get_state(config={'configurable': {'thread_id': thread_id}}).values['messages']
+    state = chatbot.get_state(config={'configurable': {'thread_id': thread_id}})
+    # Check if messages key exists in state values, return empty list if not
+    return state.values.get('messages', [])
 
 
 # **************************************** Session Setup ******************************
@@ -80,15 +82,18 @@ if user_input:
 
     CONFIG = {'configurable': {'thread_id': st.session_state['thread_id']}}
 
-    # first add the message to message_history
-    with st.chat_message('assistant'):
+     # first add the message to message_history
+    with st.chat_message("assistant"):
+        def ai_only_stream():
+            for message_chunk, metadata in chatbot.stream(
+                {"messages": [HumanMessage(content=user_input)]},
+                config=CONFIG,
+                stream_mode="messages"
+            ):
+                if isinstance(message_chunk, AIMessage):
+                    # yield only assistant tokens
+                    yield message_chunk.content
 
-        ai_message = st.write_stream(
-            message_chunk.content for message_chunk, metadata in chatbot.stream(
-                {'messages': [HumanMessage(content=user_input)]},
-                config= CONFIG,
-                stream_mode= 'messages'
-            )
-        )
+        ai_message = st.write_stream(ai_only_stream())
 
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})

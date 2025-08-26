@@ -19,7 +19,8 @@ def add_thread(thread_id):
 
 def load_conversation(thread_id):
     state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
-    return state.values["messages"]
+    # Check if messages key exists in state values, return empty list if not
+    return state.values.get("messages", [])
 
 # ======================= Session Initialization ===================
 if "message_history" not in st.session_state:
