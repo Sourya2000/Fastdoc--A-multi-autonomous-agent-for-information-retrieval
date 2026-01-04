@@ -6,13 +6,16 @@ import tempfile
 from typing import Annotated, Any, Dict, Optional, TypedDict
 
 from dotenv import load_dotenv
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.vectorstores import FAISS
 from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.tools import tool
-#from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+# -------- NEW IMPORTS (Gemini) --------
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
@@ -22,17 +25,22 @@ import requests
 load_dotenv()
 
 # -------------------
-# 1. LLM + embeddings
+# 1. LLM + embeddings (GEMINI)
 # -------------------
-llm = ChatOpenAI(model="gpt-4o-mini")
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    temperature=0
+)
+
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/text-embedding-004"
+)
 
 # -------------------
 # 2. PDF retriever store (per thread)
 # -------------------
 _THREAD_RETRIEVERS: Dict[str, Any] = {}
 _THREAD_METADATA: Dict[str, dict] = {}
-
 
 def _get_retriever(thread_id: Optional[str]):
     """Fetch the retriever for a thread if available."""
@@ -81,7 +89,6 @@ def ingest_pdf(file_bytes: bytes, thread_id: str, filename: Optional[str] = None
             "chunks": len(chunks),
         }
     finally:
-        # The FAISS store keeps copies of the text, so the temp file is safe to remove.
         try:
             os.remove(temp_path)
         except OSError:
@@ -121,7 +128,7 @@ def calculator(first_num: float, second_num: float, operation: str) -> dict:
             "result": result,
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e)} 
 
 
 @tool
@@ -165,6 +172,7 @@ def rag_tool(query: str, thread_id: Optional[str] = None) -> dict:
 
 tools = [search_tool, get_stock_price, calculator, rag_tool]
 llm_with_tools = llm.bind_tools(tools)
+
 
 # -------------------
 # 4. State
